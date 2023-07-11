@@ -1,59 +1,67 @@
-use crate::state::{Exchanges, NextState};
+use crate::{Exchanges, NextState};
 use itertools::Itertools;
 use rand::distributions::{Distribution, Uniform};
 use std::collections::{BTreeSet, HashSet};
 
-/// Describes the reasons why [`NextState::next_exchange`] could not be executed.
+/// Describes the reason why the [next exchange](NextState::next_exchange) could not be executed.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum NextExchangeError {
-    /// Attempting to exchange after the game has ended.
+    /// Attempting [to exchange](NextState::next_exchange) after the game has ended.
     HasEnded,
-    /// Attempting to exchange no tiles.
+    /// Attempting [to exchange](NextState::next_exchange) no [tiles](crate::Tile).
     EmptyTiles,
-    /// Attempting to exchange tiles not in the player's hand.
+    /// Attempting [to exchange](NextState::next_exchange) [tiles](crate::Tile) not
+    /// in the player's hand.
     IndexesOutOfBounds {
-        /// Exchanges where the index is greater than or equal to hand_len.
+        /// [Exchanges](Exchanges) where the index is greater than or equal to `hand_len`.
         illegal_exchanges: Exchanges,
-        /// The number of tiles in `current_player`'s hand, or the minimum illegal exchange index.
+        /// The number of [tiles](crate::Tile) in the current player's hand,
+        /// or the minimum illegal [exchange](Exchanges) index.
         hand_len: usize,
     },
-    /// Attempting to exchange only illegal tiles.
+    /// Attempting [to exchange](NextState::next_exchange) only illegal [tiles](crate::Tile).
     NoLegalTiles,
-    /// Attempting to exchange more legal tiles than tiles in bag.
+    /// Attempting [to exchange](NextState::next_exchange) more legal [tiles](crate::Tile)
+    /// than [tiles](crate::Tile) in the bag.
     NotEnoughTiles {
-        /// The number of legal tiles being exchanged.
+        /// The number of legal [tiles](crate::Tile) being exchanged.
         legal_exchanges: usize,
-        /// The number of available tiles in `bag`.
+        /// The number of available [tiles](crate::Tile) in the bag.
         bag_len: usize,
     },
 }
 
 impl NextState {
-    //noinspection RsLiveness
-    /// Checks whether exchanges matches various error conditions and returns all found errors.
-    /// Otherwise, exchanges tiles from `current_player`'s hand with tiles
-    /// from `bag`, ignores `points`, and advances to the next player.
+    /// Checks whether [exchanges](Exchanges) matches various error conditions and
+    /// returns all found errors. Otherwise, [exchanges](Exchanges) [tiles](crate::Tile)
+    /// from the current player's hand with [tiles](crate::Tile)
+    /// from the bag, ignores points,
+    /// and advances to the next player.
     ///
     /// # Arguments
     ///
-    /// * `exchanges`: An ordered set of indexes of tiles to be exchanged.
+    /// * `exchanges`: An ordered set of indexes of [tiles](crate::Tile) to be exchanged.
     ///
     /// # Errors
     ///
-    /// * [`NextExchangeError::HasEnded`] Attempting to exchange after the game has ended.
-    /// * [`NextExchangeError::EmptyTiles`] Attempting to exchange no tiles.
-    /// * [`NextExchangeError::IndexesOutOfBounds`] Attempting to exchange tiles
-    /// not in the player's hand.
-    /// * [`NextExchangeError::NoLegalTiles`] Attempting to exchange only illegal tiles.
-    /// * [`NextExchangeError::NotEnoughTiles`] Attempting to exchange more legal tiles
-    /// than tiles in bag.
+    /// * [NextExchangeError::HasEnded] Attempting [to exchange](NextState::next_exchange)
+    /// after the game has ended.
+    /// * [NextExchangeError::EmptyTiles] Attempting [to exchange](NextState::next_exchange)
+    /// no [tiles](crate::Tile).
+    /// * [NextExchangeError::IndexesOutOfBounds] Attempting [to exchange](NextState::next_exchange)
+    /// [tiles](crate::Tile) not in the player's hand.
+    /// * [NextExchangeError::NoLegalTiles] Attempting [to exchange](NextState::next_exchange) only
+    /// illegal [tiles](crate::Tile).
+    /// * [NextExchangeError::NotEnoughTiles] Attempting [to exchange](NextState::next_exchange)
+    /// more legal [tiles](crate::Tile) than [tiles](crate::Tile) in the bag.
     pub fn next_exchange(
         &mut self,
         exchanges: &Exchanges,
     ) -> Result<(), HashSet<NextExchangeError>> {
         self.check_exchanges(&exchanges)?;
 
-        // Cannot filter or drain by tile since exchanges might request a subset of duplicate tiles
+        // Cannot filter or drain by tile since exchanges might request
+        // a subset of duplicate tiles
         let hand = &mut self.hands[self.current_player];
         let tiles_from_hand = exchanges
             .iter()
@@ -61,10 +69,12 @@ impl NextState {
             .map(|&index| hand.remove(index))
             .collect_vec();
 
-        // Drain bag`before adding tiles from hand so that tiles do not return into hand
+        // Drain the bag before adding tiles from the hand
+        // so that tiles do not return into the hand
         hand.extend(self.bag.drain(self.bag.len() - exchanges.len()..));
 
-        // shuffle tiles into bag, but in place and without O(n log n) shuffle operation
+        // shuffle tiles in the bag, but in place
+        // and without O(n log n) shuffle operation
         let mut rng = rand::thread_rng();
         let start = self.bag.len();
         self.bag.extend(tiles_from_hand);
@@ -78,21 +88,25 @@ impl NextState {
         Ok(())
     }
 
-    /// Checks whether exchanges matches various error conditions and returns all found errors.
+    /// Checks whether [exchanges](Exchanges) matches various error conditions
+    /// and returns all found errors.
     ///
     /// # Arguments
     ///
-    /// * `exchanges`: An ordered set of indexes of tiles to be exchanged.
+    /// * `exchanges`: An ordered set of indexes of [tiles](crate::Tile) to be exchanged.
     ///
     /// # Errors
     ///
-    /// * [`NextExchangeError::HasEnded`] Attempting to exchange after the game has ended.
-    /// * [`NextExchangeError::EmptyTiles`] Attempting to exchange no tiles.
-    /// * [`NextExchangeError::IndexesOutOfBounds`] Attempting to exchange tiles
-    /// not in the player's hand.
-    /// * [`NextExchangeError::NoLegalTiles`] Attempting to exchange only illegal tiles.
-    /// * [`NextExchangeError::NotEnoughTiles`] Attempting to exchange more legal tiles
-    /// than tiles in bag.
+    /// * [NextExchangeError::HasEnded] Attempting [to exchange](NextState::next_exchange)
+    /// after the game has ended.
+    /// * [NextExchangeError::EmptyTiles] Attempting [to exchange](NextState::next_exchange)
+    /// no [tiles](crate::Tile).
+    /// * [NextExchangeError::IndexesOutOfBounds] Attempting [to exchange](NextState::next_exchange)
+    /// [tiles](crate::Tile) not in the player's hand.
+    /// * [NextExchangeError::NoLegalTiles] Attempting [to exchange](NextState::next_exchange) only
+    /// illegal [tiles](crate::Tile).
+    /// * [NextExchangeError::NotEnoughTiles] Attempting [to exchange](NextState::next_exchange)
+    /// more legal [tiles](crate::Tile) than [tiles](crate::Tile) in the bag.
     fn check_exchanges(&self, exchanges: &Exchanges) -> Result<(), HashSet<NextExchangeError>> {
         let mut errors = HashSet::with_capacity(4);
         if self.has_ended() {
@@ -135,9 +149,33 @@ impl NextState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{Color, NextState};
-    use map_macro::{btree_set, set};
+    use crate::{Color, NextState};
+    use map_macro::{btree_set, hash_set};
     use rand::Rng;
+    use tap::Tap;
+
+    impl NextState {
+        fn test_next_exchange_one_error(
+            self,
+            exchanges: impl IntoIterator<Item = usize>,
+            expected_error: NextExchangeError,
+        ) {
+            self.test_next_exchange_errors(exchanges, hash_set! { expected_error });
+        }
+
+        fn test_next_exchange_errors(
+            mut self,
+            exchanges: impl IntoIterator<Item = usize>,
+            expected_error: HashSet<NextExchangeError>,
+        ) {
+            let exchanges = exchanges.into_iter().collect();
+            let actual_error = self
+                .next_exchange(&exchanges)
+                .expect_err("next_exchange should return Err");
+
+            assert_eq!(expected_error, actual_error);
+        }
+    }
 
     #[test]
     fn has_ended() {
@@ -147,12 +185,8 @@ mod tests {
         next_state.random_players(&mut rng);
         next_state.deadlocked_board();
         next_state.random_hands(&mut rng);
-        let exchanges = btree_set! {0};
 
-        let actual_error = next_state.next_exchange(&exchanges).unwrap_err();
-
-        let expected_error = set! { NextExchangeError::HasEnded };
-        assert_eq!(expected_error, actual_error);
+        next_state.test_next_exchange_one_error([0], NextExchangeError::HasEnded);
     }
 
     #[test]
@@ -162,12 +196,8 @@ mod tests {
         next_state.random_players(&mut rng);
         next_state.random_board(&mut rng);
         next_state.random_hands(&mut rng);
-        let exchanges = btree_set! {};
 
-        let actual_error = next_state.next_exchange(&exchanges).unwrap_err();
-
-        let expected_error = set! { NextExchangeError::EmptyTiles };
-        assert_eq!(expected_error, actual_error);
+        next_state.test_next_exchange_one_error([], NextExchangeError::EmptyTiles);
     }
 
     #[test]
@@ -179,20 +209,20 @@ mod tests {
         next_state.random_board(&mut rng);
         let hand_len = next_state.random_hands(&mut rng);
 
-        let mut exchanges = btree_set! {0};
         let possible_illegal_indexes = Uniform::from(hand_len..=usize::MAX);
         let illegal_exchanges: Exchanges = (1..hand_len)
             .map(|_| possible_illegal_indexes.sample(&mut rng))
             .collect();
-        exchanges.extend(illegal_exchanges.iter());
 
-        let actual_error = next_state.next_exchange(&exchanges).unwrap_err();
-
-        let expected_error = set! { NextExchangeError::IndexesOutOfBounds {
-            illegal_exchanges,
-            hand_len
-        }};
-        assert_eq!(expected_error, actual_error);
+        next_state.test_next_exchange_one_error(
+            illegal_exchanges.clone().tap_mut(|exchanges| {
+                exchanges.insert(0);
+            }),
+            NextExchangeError::IndexesOutOfBounds {
+                illegal_exchanges,
+                hand_len,
+            },
+        );
     }
 
     #[test]
@@ -202,23 +232,22 @@ mod tests {
         next_state.random_players(&mut rng);
         next_state.random_board(&mut rng);
         let hand_len = next_state.random_hands(&mut rng);
-        let mut exchanges = btree_set! {};
+
         let possible_illegal_indexes = Uniform::from(hand_len..=usize::MAX);
         let illegal_exchanges: Exchanges = (0..hand_len)
             .map(|_| possible_illegal_indexes.sample(&mut rng))
             .collect();
-        exchanges.extend(illegal_exchanges.iter());
 
-        let actual_error = next_state.next_exchange(&exchanges).unwrap_err();
-
-        let expected_error = set! {
-            NextExchangeError::IndexesOutOfBounds {
+        next_state.test_next_exchange_errors(
+            illegal_exchanges.clone(),
+            hash_set! {
+              NextExchangeError::IndexesOutOfBounds {
                 illegal_exchanges,
-                hand_len
+                hand_len,
+              },
+              NextExchangeError::NoLegalTiles,
             },
-            NextExchangeError::NoLegalTiles
-        };
-        assert_eq!(expected_error, actual_error);
+        );
     }
 
     #[test]
@@ -228,15 +257,14 @@ mod tests {
         next_state.random_players(&mut rng);
         next_state.random_board(&mut rng);
         next_state.random_hands(&mut rng);
-        let exchanges = btree_set! {0};
 
-        let actual_error = next_state.next_exchange(&exchanges).unwrap_err();
-
-        let expected_error = set! { NextExchangeError::NotEnoughTiles {
-            legal_exchanges: exchanges.len(),
-            bag_len: 0
-        }};
-        assert_eq!(expected_error, actual_error);
+        next_state.test_next_exchange_one_error(
+            [0],
+            NextExchangeError::NotEnoughTiles {
+                legal_exchanges: 1,
+                bag_len: 0,
+            },
+        );
     }
 
     #[test]
@@ -247,27 +275,26 @@ mod tests {
         next_state.random_board(&mut rng);
         let hand_len = next_state.random_hands(&mut rng);
 
-        let mut exchanges = btree_set! {0};
-
         let possible_illegal_indexes = Uniform::from(hand_len..=usize::MAX);
         let illegal_exchanges: Exchanges = (1..hand_len)
             .map(|_| possible_illegal_indexes.sample(&mut rng))
             .collect();
-        exchanges.extend(illegal_exchanges.iter());
 
-        let actual_error = next_state.next_exchange(&exchanges).unwrap_err();
-
-        let expected_error = set! {
-            NextExchangeError::IndexesOutOfBounds {
+        next_state.test_next_exchange_errors(
+            illegal_exchanges.clone().tap_mut(|exchanges| {
+                exchanges.insert(0);
+            }),
+            hash_set! {
+              NextExchangeError::IndexesOutOfBounds {
                 illegal_exchanges,
-                hand_len
-            },
-            NextExchangeError::NotEnoughTiles {
+                hand_len,
+              },
+              NextExchangeError::NotEnoughTiles {
                 legal_exchanges: 1,
-                bag_len: 0
-            }
-        };
-        assert_eq!(expected_error, actual_error);
+                bag_len: 0,
+              }
+            },
+        );
     }
 
     #[test]
@@ -292,7 +319,9 @@ mod tests {
         let exchanges = btree_set! {1};
         let exchanges_len = exchanges.len();
 
-        next_state.next_exchange(&exchanges).unwrap();
+        next_state
+            .next_exchange(&exchanges)
+            .expect("next_exchange should return Ok");
 
         let hand = &next_state.hands[current_player];
         assert_eq!(first, hand[0]);
@@ -308,19 +337,22 @@ mod tests {
     fn exchange_no_points() {
         let (mut next_state, exchanges) = set_up_next_exchange();
 
-        next_state.next_exchange(&exchanges).unwrap();
+        next_state
+            .next_exchange(&exchanges)
+            .expect("next_exchange should return Ok");
 
         assert_eq!(0, next_state.points[0]);
     }
 
     #[test]
     fn exchange_some_points() {
-        let mut rng = rand::thread_rng();
         let (mut next_state, exchanges) = set_up_next_exchange();
-        next_state.random_points(&mut rng);
+        next_state.random_points(&mut rand::thread_rng());
         let points = next_state.points[0];
 
-        next_state.next_exchange(&exchanges).unwrap();
+        next_state
+            .next_exchange(&exchanges)
+            .expect("next_exchange should return Ok");
 
         assert_eq!(points, next_state.points[0]);
     }
@@ -329,7 +361,9 @@ mod tests {
     fn exchange_increment_current_player() {
         let (mut next_state, exchanges) = set_up_next_exchange();
 
-        next_state.next_exchange(&exchanges).unwrap();
+        next_state
+            .next_exchange(&exchanges)
+            .expect("next_exchange should return Ok");
 
         assert_eq!(1, next_state.current_player);
     }
@@ -339,12 +373,13 @@ mod tests {
         let (mut next_state, exchanges) = set_up_next_exchange();
         next_state.current_player = next_state.points.len() - 1;
 
-        next_state.next_exchange(&exchanges).unwrap();
+        next_state
+            .next_exchange(&exchanges)
+            .expect("next_exchange should return Ok");
 
         assert_eq!(0, next_state.current_player);
     }
 
-    #[inline]
     fn set_up_next_exchange() -> (NextState, Exchanges) {
         let mut rng = rand::thread_rng();
         let mut next_state = NextState::empty_next_state();

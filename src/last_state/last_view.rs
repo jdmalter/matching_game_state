@@ -1,21 +1,20 @@
-use crate::state::{Board, Hands, LastState, Points};
+use crate::{Board, Hands, LastState, Points};
 
-/// Immutably borrows properties from [`LastState`].
+/// Immutably borrows properties from [LastState].
 #[derive(Debug)]
 pub struct LastView<'a> {
-    /// This is a map of coordinates to tiles that have been played.
+    /// This is a map of [coordinates](crate::Coordinate) to [tiles](crate::Tile) that
+    /// have been played.
     pub board: &'a Board,
     /// A vector of points for each player.
     pub points: &'a Points,
-    /// A vector of hands, where each hand is a vector of tiles.
+    /// A vector of hands for each player, where each hand is
+    /// a vector of [tiles](crate::Tile).
     pub hands: &'a Hands,
 }
 
 impl<'a> LastState {
-    /// # Returns
-    ///
-    /// A new [`LastView`] struct, which immutably borrows properties from [`LastState`].
-    #[inline]
+    /// A new [LastView] struct, which immutably borrows properties from [LastState].
     pub fn last_view(&'a self) -> LastView<'a> {
         LastView {
             board: &self.board,
@@ -31,8 +30,7 @@ mod tests {
 
     #[test]
     fn last_view() {
-        let mut rng = rand::thread_rng();
-        let last_state: LastState = LastState::random_last_state(&mut rng);
+        let last_state: LastState = LastState::random_last_state(&mut rand::thread_rng());
 
         let last_view = last_state.last_view();
 

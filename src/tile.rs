@@ -2,16 +2,34 @@ use num_derive::FromPrimitive;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 
-/// The number of [`Tile`] variants. 36 tiles from 6 colors and 6 shapes.
+/// The number of [tile](Tile) variants. `36` [tiles](Tile) from `6` colors and `6` shapes.
+///
+/// # See Also
+///
+/// * [Color::COLORS_LEN]
+/// * [Shape::SHAPES_LEN]
+/// * [tiles]
 pub const TILES_LEN: usize = Color::COLORS_LEN * Shape::SHAPES_LEN;
+// cannot use assert_eq! in a const context
+//noinspection RsAssertEqual
+const _: () = assert!(TILES_LEN == Color::COLORS_LEN * Shape::SHAPES_LEN);
 
-/// Describes a tile with [`Color`] and [`Shape`] in a game.
+/// An tuple with a [color](Color) and a [shape](Shape) to be played or exchanged in the game.
+///
+/// # See Also
+///
+/// * [tiles]
+/// * [possible_plays](crate::possible_plays)
+/// * [check_line](crate::check_line)
 pub type Tile = (Color, Shape);
 
-/// # Returns
+/// An array of all [tile](Tile) variants in [color](Color) then [shape](Shape) order.
 ///
-/// An array of all [`Tile`] variants in color then shape order.
-#[inline]
+/// # See Also
+///
+/// * [TILES_LEN]
+/// * [FirstState::new](crate::FirstState::new)
+/// * [FirstState::new_random_first_player_selector](crate::FirstState::new_random_first_player)
 pub fn tiles() -> [Tile; TILES_LEN] {
     [
         (Color::Red, Shape::Circle),
@@ -53,7 +71,7 @@ pub fn tiles() -> [Tile; TILES_LEN] {
     ]
 }
 
-/// Describes the color on a [`Tile`].
+/// Describes the color on a [tile](Tile).
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive)]
 pub enum Color {
     /// `0`.
@@ -71,13 +89,19 @@ pub enum Color {
 }
 
 impl Color {
-    /// The number of [`Color`] variants. 6 colors.
+    /// The number of [Color] variants. `6` colors.
+    ///
+    /// # See Also
+    ///
+    /// * [Color::colors]
+    /// * [TILES_LEN]
     pub const COLORS_LEN: usize = 6;
 
-    /// # Returns
+    /// An array of all [Color] variants in order.
     ///
-    /// An array of all [`Color`] variants in order.
-    #[inline]
+    /// # See Also
+    ///
+    /// * [Color::COLORS_LEN]
     pub fn colors() -> [Color; Color::COLORS_LEN] {
         [
             Color::Red,
@@ -89,16 +113,17 @@ impl Color {
         ]
     }
 }
+/// random depends on this being true
+const _: () = assert!(Color::COLORS_LEN > 1);
 
 impl Distribution<Color> for Standard {
-    #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Color {
         let index = rng.gen_range(0..Color::COLORS_LEN);
         num::FromPrimitive::from_usize(index).unwrap_or_else(|| {
             dbg!(index, Color::COLORS_LEN);
             unreachable!(
                 "index ({:?}) should be matched since colors cover all indexes \
-                in range 0..Color::COLORS_LEN (0..{:?}).",
+                        in range 0..Color::COLORS_LEN (0..{:?}).",
                 index,
                 Color::COLORS_LEN
             );
@@ -106,9 +131,8 @@ impl Distribution<Color> for Standard {
     }
 }
 
-/// Describes the shape on a [`Tile`].
+/// Describes the shape on a [tile](Tile).
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive)]
-#[allow(missing_docs)]
 pub enum Shape {
     /// `0`.
     Circle = 0,
@@ -125,13 +149,19 @@ pub enum Shape {
 }
 
 impl Shape {
-    /// The number of [`Shape`] variants. 6 shapes.
+    /// The number of [Shape] variants. 6 shapes.
+    ///
+    /// # See Also
+    ///
+    /// * [Shape::shapes]
+    /// * [TILES_LEN]
     pub const SHAPES_LEN: usize = 6;
 
-    /// # Returns
+    /// An array of all [Shape] variants in order.
     ///
-    /// An array of all [`Shape`] variants in order.
-    #[inline]
+    /// # See Also
+    ///
+    /// * [Shape::SHAPES_LEN]
     pub fn shapes() -> [Shape; Shape::SHAPES_LEN] {
         [
             Shape::Circle,
@@ -143,16 +173,17 @@ impl Shape {
         ]
     }
 }
+/// random depends on this being true
+const _: () = assert!(Shape::SHAPES_LEN > 1);
 
 impl Distribution<Shape> for Standard {
-    #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Shape {
         let index = rng.gen_range(0..Shape::SHAPES_LEN);
         num::FromPrimitive::from_usize(index).unwrap_or_else(|| {
             dbg!(index, Shape::SHAPES_LEN);
             unreachable!(
                 "index ({:?}) should be matched since shapes cover all indexes \
-                in range 0..Shape::SHAPES_LEN (0..{:?}).",
+                        in range 0..Shape::SHAPES_LEN (0..{:?}).",
                 index,
                 Shape::SHAPES_LEN
             );
@@ -167,7 +198,6 @@ mod tests {
 
     #[test]
     fn tiles_len() {
-        assert_eq!(TILES_LEN, Color::COLORS_LEN * Shape::SHAPES_LEN);
         assert_eq!(TILES_LEN, tiles().len());
     }
 
@@ -195,12 +225,7 @@ mod tests {
 
     #[test]
     fn count_colors() {
-        let mut counts = [0; Color::COLORS_LEN];
-        for color in Color::colors() {
-            counts[color as usize] += 1;
-        }
-
-        for count in counts {
+        for count in Color::colors().into_iter().counts().into_values() {
             assert_eq!(1, count);
         }
     }
@@ -224,11 +249,7 @@ mod tests {
 
     #[test]
     fn count_shapes() {
-        let mut counts = [0; Shape::SHAPES_LEN];
-        for shape in Shape::shapes() {
-            counts[shape as usize] += 1;
-        }
-        for count in counts {
+        for count in Shape::shapes().into_iter().counts().into_values() {
             assert_eq!(1, count);
         }
     }

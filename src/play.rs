@@ -1,16 +1,51 @@
-use crate::{Board, Color, Coordinate, Shape, Tile, FULL_MATCH_BONUS};
+use crate::{Board, Color, Coordinate, Plays, Shape, Tile, COORDINATE_LIMIT, FULL_MATCH_BONUS};
 use itertools::Itertools;
 use map_macro::btree_set;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::iter::Peekable;
 
-/// An collection of indexes where each item is a combination of length `k` unique [tiles](Tile)
-/// from the [hand](crate::Hand) where all [tiles](Tile) have either
+/// Partitions [plays](Plays) by whether each [play](Plays) is inside
+/// the [coordinate limit](COORDINATE_LIMIT) or not.
+///
+/// # See Also
+///
+/// * [FirstState::first_play](crate::FirstState::first_play)
+/// * [NextState::next_play](crate::NextState::next_play)
+///
+/// # Returns
+///
+/// A tuple two collections of [plays](Plays) where the first collection contains
+/// [coordinates](Coordinate) inside the [coordinate limit](COORDINATE_LIMIT) and
+/// the second collection contains [coordinates](Coordinate) on or outside
+/// the [coordinate limit](COORDINATE_LIMIT).
+pub fn partition_by_coordinates(plays: &Plays) -> (Plays, Plays) {
+    let x_outside_coordinate_limit = plays
+        .right_range(..=(-COORDINATE_LIMIT, isize::MAX))
+        .chain(plays.right_range((COORDINATE_LIMIT, isize::MIN)..))
+        .map(|(&index, &coordinate)| (index, coordinate));
+    let (y_outside_coordinate_limit, y_inside_coordinate_limit): (Plays, Plays) = plays
+        .right_range((-COORDINATE_LIMIT + 1, isize::MIN)..(COORDINATE_LIMIT, isize::MIN))
+        .map(|(&index, &coordinate)| (index, coordinate))
+        .partition(|&(_, (_, y))| -COORDINATE_LIMIT >= y || y >= COORDINATE_LIMIT);
+    (
+        y_inside_coordinate_limit,
+        x_outside_coordinate_limit
+            .chain(y_outside_coordinate_limit)
+            .collect(),
+    )
+}
+
+/// Finds a collection of indexes where each item is a combination of length `k`
+/// unique [tiles](Tile) from the hand where all [tiles](Tile) have either
 /// the same [color](Color) or the same [shape](Shape).
 ///
 /// # See Also
 ///
-/// [crate::FirstState::first_play]
+/// * [FirstState::first_play](crate::FirstState::first_play)
+///
+/// # Returns
+///
+/// A collection of possible plays of length `k` taken from the hand.
 pub fn possible_plays<B, P>(hand: impl IntoIterator<Item = Tile>, k: usize) -> B
 where
     P: FromIterator<usize>,
@@ -19,7 +54,7 @@ where
     hand.into_iter()
         // indexes collected after filter
         .enumerate()
-        // combinations must use unique [tiles](Tile) to prevent replacements
+        // combinations must use unique tiles to prevent replacements
         .unique_by(|&(_, tile)| tile)
         // no replacements
         .combinations(k)
@@ -48,37 +83,37 @@ where
         .collect()
 }
 
-/// Takes a `line` of [tiles](Tile) being played on the [board](Board) and returns
-/// earned [points](crate::Points) if the `line` is legal, otherwise it returns duplicate groups
+/// Takes a `line` of [tiles](Tile) being played on the board and returns
+/// earned points if the `line` is legal. Otherwise, it returns duplicate groups
 /// and/or multiple matching groups.
 ///
 /// # Points Calculation
 ///
 /// The number of points from a line is the number of [tiles](Tile) in that line. If the
-/// line creates a full match on the [board](Board) where a line contains either
-/// every [color](Color::colors) or every [shape](Shape::shapes), an extra
+/// line creates a full match on the board where a line contains either
+/// [every color](Color::colors) or [every shape](Shape::shapes), an extra
 /// [full match bonus](FULL_MATCH_BONUS) is earned.
 ///
 /// # Arguments
 ///
 /// * `line`: A map of [coordinates](Coordinate) to [tiles](Tile) being played
-/// on the [board](Board).
+/// on the board.
 ///
 /// # Errors
 ///
-/// * If there are duplicate tiles in the `line`, groups of duplicates are returned
+/// * If there are duplicate [tiles](Tile) in the `line`, groups of duplicates are returned
 /// in the first tuple field.
 /// * If there are multiple matching groups in the `line`, groups of matches are returned
 /// in the second tuple field.
 ///
 /// # See Also
 ///
-/// * [crate::FirstState::first_play]
-/// * [crate::NextState::next_play]
+/// * [FirstState::first_play](crate::FirstState::first_play)
+/// * [NextState::next_play](crate::NextState::next_play)
 ///
 /// # Returns
 ///
-/// The earned [points](crate::Points) of the `line`.
+/// The earned points of the `line`.
 pub fn check_line(
     line: &Board,
 ) -> Result<
@@ -152,8 +187,8 @@ pub fn check_line(
     };
 
     // If matching_shapes is not empty, then colors are different but the shapes are all the same
-    // which means line is [color](crate::Color) line. If line is not a [color](crate::Color) line,
-    // it is a [shape](crate::Shape) line. If the line is both (single tile), then line is
+    // which means line is a color line. If line is not a color line,
+    // it is a shape line. If the line is both (single tile), then line is
     // not long enough for bonus anyways. Checks if full match has been played for bonus.
     let is_color_line = !matching_shapes.is_empty();
     if (is_color_line && len == Color::COLORS_LEN) || len == Shape::SHAPES_LEN {
@@ -163,23 +198,58 @@ pub fn check_line(
     }
 }
 
-/// An ordered tuple where the first item is next value from `peekable` and the second item is
-/// the last value in a continuous, inclusive, increasing range from the first to the last value.
+/// An ordered tuple where the second item is next value from `peekable` and the first item is
+/// the last value in a continuous, decreasing range from the first to the last value.
 /// It is possible for the first and last values to be the same when the next value after first
-/// is not continuous or increasing. If `peekable` iteration is finished before the first value,
-/// returns [None]; otherwise, returns [Some].
+/// is not continuous or decreasing. If the `peekable` iteration is finished before the first value,
+/// returns [None]. Otherwise, returns [Some].
 ///
 /// # See Also
 ///
-/// * [crate::FirstState::first_play]
-/// * [crate::NextState::next_play]
-pub fn batch_continuous_range<I>(peekable: &mut Peekable<I>) -> Option<(isize, isize)>
+/// * [Itertools::batching]
+/// * [FirstState::first_play](crate::FirstState::first_play)
+/// * [NextState::next_play](crate::NextState::next_play)
+///
+/// # Returns
+///
+/// An tuple containing the next range from `peekable`.
+pub fn batch_continuous_decreasing_range<I>(peekable: &mut Peekable<I>) -> Option<(isize, isize)>
 where
     I: Iterator<Item = isize>,
 {
     let Some(first) = peekable.next() else {
-    return None;
-  };
+        return None;
+    };
+
+    let mut last = first;
+    while let Some(next) = peekable.next_if_eq(&(last - 1)) {
+        last = next;
+    }
+    Some((last, first))
+}
+
+/// An ordered tuple where the first item is next value from `peekable` and the second item is
+/// the last value in a continuous, increasing range from the first to the last value.
+/// It is possible for the first and last values to be the same when the next value after first
+/// is not continuous or increasing. If the `peekable` iteration is finished before the first value,
+/// returns [None]. Otherwise, returns [Some].
+///
+/// # See Also
+///
+/// * [Itertools::batching]
+/// * [FirstState::first_play](crate::FirstState::first_play)
+/// * [NextState::next_play](crate::NextState::next_play)
+///
+/// # Returns
+///
+/// An tuple containing the next range from `peekable`.
+pub fn batch_continuous_increasing_range<I>(peekable: &mut Peekable<I>) -> Option<(isize, isize)>
+where
+    I: Iterator<Item = isize>,
+{
+    let Some(first) = peekable.next() else {
+        return None;
+    };
 
     let mut last = first;
     while let Some(next) = peekable.next_if_eq(&(last + 1)) {
@@ -191,10 +261,67 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Hand;
-    use map_macro::map;
+    use crate::{random_illegal_coordinates, random_legal_coordinates, Hand};
+    use map_macro::hash_map;
     use rand::Rng;
     use std::iter;
+
+    #[test]
+    fn partition_by_coordinates_empty_plays() {
+        test_partition_by_coordinates(Plays::new(), Plays::new(), Plays::new());
+    }
+
+    #[test]
+    fn partition_by_coordinates_in_bounds() {
+        let plays: Plays = (1..)
+            .zip(random_legal_coordinates(&mut rand::thread_rng()))
+            .collect();
+
+        test_partition_by_coordinates(plays.clone(), plays, Plays::new());
+    }
+
+    #[test]
+    fn partition_by_coordinates_out_of_bounds() {
+        let plays: Plays = (1..)
+            .zip(random_illegal_coordinates(&mut rand::thread_rng()))
+            .collect();
+
+        test_partition_by_coordinates(plays.clone(), Plays::new(), plays);
+    }
+
+    #[test]
+    fn partition_by_coordinates_on_edge_case() {
+        let plays: Plays = (1..)
+            .zip([
+                (0, COORDINATE_LIMIT),
+                (0, -COORDINATE_LIMIT),
+                (COORDINATE_LIMIT, 0),
+                (-COORDINATE_LIMIT, 0),
+            ])
+            .collect();
+
+        test_partition_by_coordinates(plays.clone(), Plays::new(), plays);
+    }
+
+    #[test]
+    fn partition_by_coordinates_both_in_and_out_of_bounds() {
+        let mut rng = rand::thread_rng();
+        let legal_plays: Plays = (1..)
+            .step_by(2)
+            .zip(random_legal_coordinates(&mut rng))
+            .collect();
+        let illegal_plays: Plays = (2..)
+            .step_by(2)
+            .zip(random_illegal_coordinates(&mut rng))
+            .collect();
+        let plays = legal_plays
+            .clone()
+            .into_iter()
+            .chain(illegal_plays.clone())
+            .collect();
+
+        test_partition_by_coordinates(plays, legal_plays, illegal_plays);
+    }
 
     #[test]
     fn possible_plays_empty_hand() {
@@ -248,12 +375,12 @@ mod tests {
     }
 
     #[test]
-    fn duplicates() {
+    fn check_line_duplicates() {
         let first_duplicate = (Color::Green, Shape::Square);
         let second_duplicate = (Color::Green, Shape::X);
         let third_duplicate = (Color::Green, Shape::Circle);
         test_check_line_error(
-            map! {
+            hash_map! {
               (0, 0) => first_duplicate,
               (0, 1) => second_duplicate,
               (0, 2) => third_duplicate,
@@ -272,9 +399,9 @@ mod tests {
     }
 
     #[test]
-    fn multiple_matching() {
+    fn check_line_multiple_matching() {
         test_check_line_error(
-            map! {
+            hash_map! {
               (0, 0) => (Color::Green, Shape::Square),
               (0, 1) => (Color::Red, Shape::X),
               (0, 2) => (Color::Red, Shape::Clover),
@@ -293,9 +420,9 @@ mod tests {
     }
 
     #[test]
-    fn duplicates_multiple_matching() {
+    fn check_line_duplicates_multiple_matching() {
         test_check_line_error(
-            map! {
+            hash_map! {
               (0, 0) => (Color::Purple, Shape::Starburst),
               (0, 1) => (Color::Purple, Shape::Starburst),
               (0, 2) => (Color::Red, Shape::X),
@@ -312,13 +439,13 @@ mod tests {
 
     #[test]
     fn check_line_empty() {
-        test_check_line(map! {}, 0);
+        test_check_line(hash_map! {}, 0);
     }
 
     #[test]
     fn check_line_partial_match() {
         test_check_line(
-            map! {
+            hash_map! {
               (0, 0) => (Color::Orange, Shape::Starburst),
               (0, 1) => (Color::Blue, Shape::Starburst),
               (0, 2) => (Color::Purple, Shape::Starburst),
@@ -330,64 +457,139 @@ mod tests {
     #[test]
     fn check_line_full_match() {
         let color = rand::thread_rng().gen();
-        let line = Shape::shapes()
+        let line: Board = Shape::shapes()
             .into_iter()
             .map(|shape| (color, shape))
             .enumerate()
-            .map(|(index, tile)| ((0, index as isize), tile))
+            .map(|(index, tile)| ((index as isize, 0), tile))
             .collect();
         test_check_line(line, Shape::SHAPES_LEN + FULL_MATCH_BONUS);
     }
 
     #[test]
-    fn batch_continuous_range_none() {
-        test_batch_continuous_range(&mut iter::empty().peekable(), None);
+    fn batch_continuous_decreasing_range_none() {
+        test_batch_continuous_decreasing_range(&mut iter::empty().peekable(), None);
     }
 
     #[test]
-    fn batch_continuous_range_one_value() {
+    fn batch_continuous_decreasing_range_one_value() {
         let first = rand::thread_rng().gen();
-        test_batch_continuous_range(&mut [first].into_iter().peekable(), Some((first, first)));
+        test_batch_continuous_decreasing_range(
+            &mut [first].into_iter().peekable(),
+            Some((first, first)),
+        );
     }
 
     #[test]
-    fn batch_continuous_range_not_continuous() {
+    fn batch_continuous_decreasing_range_not_continuous() {
+        let first = rand::thread_rng().gen_range(isize::MIN + 2..=isize::MAX);
+        test_batch_continuous_decreasing_range(
+            &mut [first, first - 2].into_iter().peekable(),
+            Some((first, first)),
+        );
+    }
+
+    #[test]
+    fn batch_continuous_decreasing_range_not_decreasing() {
+        let first = rand::thread_rng().gen_range(isize::MIN..=isize::MAX - 1);
+        test_batch_continuous_decreasing_range(
+            &mut [first, first + 1].into_iter().peekable(),
+            Some((first, first)),
+        );
+    }
+
+    #[test]
+    fn batch_continuous_decreasing_range_wide() {
+        let mut rng = rand::thread_rng();
+        let diff = rng.gen_range(100..200);
+        let first = rng.gen_range(isize::MIN..=isize::MAX - diff);
+        test_batch_continuous_decreasing_range(
+            &mut (first - diff..=first).rev().peekable(),
+            Some((first - diff, first)),
+        );
+    }
+
+    #[test]
+    fn batch_continuous_decreasing_range_peekable_not_finished() {
+        let mut rng = rand::thread_rng();
+        let diff = rng.gen_range(100..200);
+        let first = rng.gen_range(isize::MIN..=isize::MAX - 2 * diff);
+        let next = first + diff + 2..=first + 2 * diff;
+        let mut peekable = (first..=first + diff).chain(next.clone()).rev().peekable();
+        test_batch_continuous_decreasing_range(
+            &mut peekable,
+            Some((first + diff + 2, first + 2 * diff)),
+        );
+        assert!(peekable.eq((first..=first + diff).rev()));
+    }
+
+    #[test]
+    fn batch_continuous_increasing_range_none() {
+        test_batch_continuous_increasing_range(&mut iter::empty().peekable(), None);
+    }
+
+    #[test]
+    fn batch_continuous_increasing_range_one_value() {
+        let first = rand::thread_rng().gen();
+        test_batch_continuous_increasing_range(
+            &mut [first].into_iter().peekable(),
+            Some((first, first)),
+        );
+    }
+
+    #[test]
+    fn batch_continuous_increasing_range_not_continuous() {
         let first = rand::thread_rng().gen_range(isize::MIN..=isize::MAX - 2);
-        test_batch_continuous_range(
+        test_batch_continuous_increasing_range(
             &mut [first, first + 2].into_iter().peekable(),
             Some((first, first)),
         );
     }
 
     #[test]
-    fn batch_continuous_range_not_increasing() {
+    fn batch_continuous_increasing_range_not_increasing() {
         let first = rand::thread_rng().gen_range(isize::MIN + 1..=isize::MAX);
-        test_batch_continuous_range(
+        test_batch_continuous_increasing_range(
             &mut [first, first - 1].into_iter().peekable(),
             Some((first, first)),
         );
     }
 
     #[test]
-    fn batch_continuous_range_wide() {
+    fn batch_continuous_increasing_range_wide() {
         let mut rng = rand::thread_rng();
         let diff = rng.gen_range(100..200);
         let first = rng.gen_range(isize::MIN..=isize::MAX - diff);
-        test_batch_continuous_range(
+        test_batch_continuous_increasing_range(
             &mut (first..=first + diff).peekable(),
             Some((first, first + diff)),
         );
     }
 
     #[test]
-    fn batch_continuous_range_peekable_not_finished() {
+    fn batch_continuous_increasing_range_peekable_not_finished() {
         let mut rng = rand::thread_rng();
         let diff = rng.gen_range(100..200);
         let first = rng.gen_range(isize::MIN..=isize::MAX - 2 * diff);
         let next = first + diff + 2..=first + 2 * diff;
         let mut peekable = (first..=first + diff).chain(next.clone()).peekable();
-        test_batch_continuous_range(&mut peekable, Some((first, first + diff)));
+        test_batch_continuous_increasing_range(&mut peekable, Some((first, first + diff)));
         assert!(peekable.eq(next));
+    }
+
+    fn test_partition_by_coordinates(
+        plays: Plays,
+        expected_coordinates_in_bounds: Plays,
+        expected_coordinates_out_of_bounds: Plays,
+    ) {
+        let (actual_coordinates_in_bounds, actual_coordinates_out_of_bounds) =
+            partition_by_coordinates(&plays);
+
+        assert_eq!(expected_coordinates_in_bounds, actual_coordinates_in_bounds);
+        assert_eq!(
+            expected_coordinates_out_of_bounds,
+            actual_coordinates_out_of_bounds
+        );
     }
 
     fn test_possible_plays(k: usize, expected_plays: BTreeSet<BTreeSet<usize>>) {
@@ -410,27 +612,37 @@ mod tests {
         expected_duplicates: BTreeSet<BTreeSet<Coordinate>>,
         expected_multiple_matching: BTreeSet<BTreeSet<Coordinate>>,
     ) {
-        let (actual_duplicates, actual_multiple_matching) = check_line(&line)
-            .expect_err("check_line should return Err during test_check_line_error");
+        let (actual_duplicates, actual_multiple_matching) =
+            check_line(&line).expect_err("check_line should return Err");
 
         assert_eq!(expected_duplicates, actual_duplicates);
         assert_eq!(expected_multiple_matching, actual_multiple_matching);
     }
 
     fn test_check_line(line: Board, expected_points: usize) {
-        let actual_points =
-            check_line(&line).expect("check_line should return Ok during test_check_line");
+        let actual_points = check_line(&line).expect("check_line should return Ok");
 
         assert_eq!(expected_points, actual_points);
     }
 
-    fn test_batch_continuous_range<I>(
+    fn test_batch_continuous_decreasing_range<I>(
         peekable: &mut Peekable<I>,
         expected_range: Option<(isize, isize)>,
     ) where
         I: Iterator<Item = isize>,
     {
-        let actual_range = batch_continuous_range(peekable);
+        let actual_range = batch_continuous_decreasing_range(peekable);
+
+        assert_eq!(expected_range, actual_range);
+    }
+
+    fn test_batch_continuous_increasing_range<I>(
+        peekable: &mut Peekable<I>,
+        expected_range: Option<(isize, isize)>,
+    ) where
+        I: Iterator<Item = isize>,
+    {
+        let actual_range = batch_continuous_increasing_range(peekable);
 
         assert_eq!(expected_range, actual_range);
     }
